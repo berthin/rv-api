@@ -1,10 +1,12 @@
 package main
 
+// @TODO: Fix identation and remove dead and testing-only code 
 import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
+    "html"
 	"net/http"
 	"os"
 	"time"
@@ -18,11 +20,11 @@ import (
 
 const (
 	DBUSER     = "root"
-	DBPASSWORD = ""
-	DBHOST     = "localhost"
-	DBPORT     = "3306"
+	DBPASSWORD = "1234"
+	DBHOST     = "127.0.0.1"
+	DBPORT     = "8080"
 	DBBASE     = "redventures"
-	PORT       = ":8080"
+	PORT       = ":8081"
 )
 
 // global
@@ -30,11 +32,12 @@ var db *sql.DB
 
 func init() {
 	var err error
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", DBUSER, DBPASSWORD, DBHOST, DBPORT, DBBASE)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", 
+                       DBUSER, DBPASSWORD, DBHOST, DBPORT, DBBASE)
+    log.Println(dsn)
 	db, err = sql.Open("mysql", dsn)
 	if err != nil {
 		panic(err)
-
 	}
 
 	if e := db.Ping(); e != nil {
@@ -46,6 +49,8 @@ func init() {
 
 func main() {
 	router := mux.NewRouter()
+
+    router.HandleFunc("/", Index)
 
 	router.HandleFunc("/api/v1/users", ListUsers).Methods(http.MethodGet)
 	router.HandleFunc("/api/v1/users/{id:[0-9]+}", CreateUser).Methods(http.MethodGet)
@@ -59,8 +64,17 @@ func main() {
 
 	loggedRouter := handlers.LoggingHandler(os.Stdout, router)
 
+    //http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        //fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
+    //})
+    //log.Fatal(http.ListenAndServe(":8081", nil))
+
 	log.Print("Listening on PORT " + PORT)
 	log.Fatal(http.ListenAndServe(PORT, handlers.RecoveryHandler()(loggedRouter)))
+}
+
+func Index(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
 }
 
 // ***************
@@ -79,6 +93,7 @@ var mySigningKey = []byte("4e3Fh54w374w")
 
 func GenToken(w http.ResponseWriter, r *http.Request) {
 
+    log.Println("trying to get token")
 	token := jwt.New(jwt.SigningMethodHS256)
 
 	claims := token.Claims.(jwt.MapClaims)
@@ -194,9 +209,11 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 			vars := mux.Vars(r)
 			pathParam := vars["id"]
 
+            log.Println("id" + pathParam)
 			row := db.QueryRow("SELECT * FROM user WHERE user.id = ?", pathParam)
 
 			err := row.Scan(&user.Id, &user.Name, &user.Gravatar)
+            log.Println(user.Name)
 			if err == sql.ErrNoRows {
 
 				message := Message{"The record for the user couldn't be found."}
@@ -220,7 +237,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 			}
 
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(302)
+			w.WriteHeader(200)
 			w.Write(userData)
 
 		} else {
