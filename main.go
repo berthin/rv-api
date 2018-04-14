@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"time"
+	//"io/ioutil"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
@@ -389,7 +390,7 @@ func GetWidget(w http.ResponseWriter, r *http.Request) {
 			}
 
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(302)
+			w.WriteHeader(200)
 			w.Write(widgetData)
 
 		} else {
@@ -431,6 +432,13 @@ func CreateWidget(w http.ResponseWriter, r *http.Request) {
 			widget := Widget{}
 
 			err := json.NewDecoder(r.Body).Decode(&widget)
+			//body, err := ioutil.ReadAll(r.Body)
+			//if err != nil {
+				//panic(err)
+			//}
+			//log.Println(string(body))
+			//err = json.Unmarshal(body, &widget)
+
 			if err != nil {
 				log.Println(err)
 				message := Message{"Something wrong happens. Try again later."}
