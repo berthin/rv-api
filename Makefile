@@ -3,3 +3,12 @@ build:
 
 run:
 	./main
+
+clean:
+	go clean
+
+all:
+	make clean
+	make build
+	make run
+
