@@ -66,7 +66,6 @@ func GetWidget(w http.ResponseWriter, r *http.Request) {
     vars := mux.Vars(r)
     pathParam := vars["id"]
 
-    // Improve select to return in the column order fashion
     row := db.QueryRow(`
         SELECT id, name, color, price, melts, inventory 
         FROM widget 
