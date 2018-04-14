@@ -1,3 +1,9 @@
+// ***************
+// Main
+// TODO:
+// - check POST, GET, PUT
+// if r.Method != "POST" {
+// ***************
 package main
 
 
@@ -43,7 +49,7 @@ func init() {
 }
 
 
-func main() {
+func configureRouter() *mux.Router {
     router := mux.NewRouter()
 
     router.HandleFunc("/api/v1/users",
@@ -62,7 +68,12 @@ func main() {
 
     router.HandleFunc("/api/v1/auth", 
                       GenToken).Methods(http.MethodGet)
+    return router
+}
 
+func main() {
+
+    router := configureRouter()
     loggedRouter := handlers.LoggingHandler(os.Stdout, router)
 
     log.Print("Listening on PORT " + PORT)
