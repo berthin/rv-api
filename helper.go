@@ -1,3 +1,7 @@
+// ****************
+// Helper functions
+// ****************
+
 package main
 
 
@@ -10,6 +14,11 @@ import (
     "github.com/dgrijalva/jwt-go/request"
     _ "github.com/go-sql-driver/mysql"
 )
+
+
+type Message struct {
+    Message string `json:"message"`
+}
 
 
 func panicOnError(err error) {

@@ -24,15 +24,6 @@ const (
 )
 
 
-// ****************
-// Helper functions
-// ****************
-
-type Message struct {
-    Message string `json:"message"`
-}
-
-
 // global
 var db *sql.DB
 
