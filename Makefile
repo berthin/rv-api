@@ -1,5 +1,5 @@
 build:
-	go build main.go TokenHelper.go WidgetsHelper.go UserHelper.go helper.go
+	go build main.go token.go widgets.go user.go helper.go
 
 run:
 	./main
