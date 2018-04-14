@@ -65,11 +65,6 @@ func main() {
 
 	loggedRouter := handlers.LoggingHandler(os.Stdout, router)
 
-    //http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        //fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
-    //})
-    //log.Fatal(http.ListenAndServe(":8081", nil))
-
 	log.Print("Listening on PORT " + PORT)
 	log.Fatal(http.ListenAndServe(PORT, handlers.RecoveryHandler()(loggedRouter)))
 }
@@ -78,6 +73,47 @@ func Index(w http.ResponseWriter, r *http.Request) {
     fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
 }
 
+// ****************
+// Helper functions
+// ****************
+
+type Message struct {
+	Message string `json:"message"`
+}
+
+func logErrorIfNonNil(err error) {
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+func sendMessage(message interface{}, statusCode int, w http.ResponseWriter) {
+	msg, err := json.Marshal(message)
+	logErrorIfNonNil(err)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	w.Write(msg)
+}
+
+func verifyTokenAccess(w http.ResponseWriter, r *http.Request) bool {
+	token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
+		func(token *jwt.Token) (interface{}, error) {
+			return mySigningKey, nil
+		})
+		
+	if err != nil {
+		sendMessage(Message{"Unauthorized access"}, http.StatusBadRequest, w)
+		return false
+	}
+	
+	if !token.Valid {
+		sendMessage(Message{"Invalid token"}, http.StatusBadRequest, w)
+		return false
+	}
+		
+	return true
+}
 // ***************
 // Auth
 // ***************
@@ -86,15 +122,10 @@ type Token struct {
 	Token string `json:"token"`
 }
 
-type Message struct {
-	Message string `json:"message"`
-}
-
 var mySigningKey = []byte("4e3Fh54w374w")
 
 func GenToken(w http.ResponseWriter, r *http.Request) {
 
-    log.Println("trying to get token")
 	token := jwt.New(jwt.SigningMethodHS256)
 
 	claims := token.Claims.(jwt.MapClaims)
@@ -107,14 +138,7 @@ func GenToken(w http.ResponseWriter, r *http.Request) {
 	authToken := Token{}
 	authToken.Token = tokenString
 
-	data, err := json.Marshal(authToken)
-	if err != nil {
-		log.Println(err)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	w.Write(data)
+	sendMessage(authToken, http.StatusOK, w)
 }
 
 // ***************
@@ -129,142 +153,56 @@ type User struct {
 
 func ListUsers(w http.ResponseWriter, r *http.Request) {
 
-	token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
-		func(token *jwt.Token) (interface{}, error) {
-			return mySigningKey, nil
-		})
-
-	if err == nil {
-		if token.Valid {
-
-			users := make([]User, 0)
-
-			rows, err := db.Query("SELECT * FROM user ORDER BY user.id DESC")
-			if err != nil {
-				log.Println(err)
-			}
-			defer rows.Close()
-
-			for rows.Next() {
-
-				user := User{}
-
-				err := rows.Scan(&user.Id, &user.Name, &user.Gravatar)
-				if err != nil {
-					log.Println(err)
-				}
-				users = append(users, user)
-			}
-
-			if err := rows.Err(); err != nil {
-				log.Println(err)
-			}
-
-			usersData, err := json.Marshal(users)
-			if err != nil {
-				log.Println(err)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(200)
-			w.Write(usersData)
-
-		} else {
-			message := Message{"Invalid token"}
-			msg, err := json.Marshal(message)
-			if err != nil {
-				log.Println(err)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(401)
-			w.Write(msg)
-			return
-		}
-	} else {
-		message := Message{"Unauthorized access"}
-		msg, err := json.Marshal(message)
-		if err != nil {
-			log.Println(err)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(401)
-		w.Write(msg)
-		return
+	if !verifyTokenAccess(w, r) {
+		return;
 	}
 
+	users := make([]User, 0)
+
+	rows, err := db.Query("SELECT * FROM user ORDER BY user.id DESC")
+	if err != nil {
+		log.Println(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+
+		user := User{}
+
+		err := rows.Scan(&user.Id, &user.Name, &user.Gravatar)
+		logErrorIfNonNil(err)
+		users = append(users, user)
+	}
+
+	logErrorIfNonNil(rows.Err())
+
+	sendMessage(users, http.StatusOK, w)
 }
 
 func CreateUser(w http.ResponseWriter, r *http.Request) {
 
-	token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
-		func(token *jwt.Token) (interface{}, error) {
-			return mySigningKey, nil
-		})
+	if !verifyTokenAccess(w, r) {
+		return;
+	}
 
-	if err == nil {
-		if token.Valid {
+	user := User{}
+	vars := mux.Vars(r)
+	pathParam := vars["id"]
 
-			user := User{}
-			vars := mux.Vars(r)
-			pathParam := vars["id"]
+	log.Println("id" + pathParam)
+	row := db.QueryRow("SELECT * FROM user WHERE user.id = ?", pathParam)
 
-            log.Println("id" + pathParam)
-			row := db.QueryRow("SELECT * FROM user WHERE user.id = ?", pathParam)
+	err := row.Scan(&user.Id, &user.Name, &user.Gravatar)
+	log.Println(user.Name)
+	if err == sql.ErrNoRows {
 
-			err := row.Scan(&user.Id, &user.Name, &user.Gravatar)
-            log.Println(user.Name)
-			if err == sql.ErrNoRows {
-
-				message := Message{"The record for the user couldn't be found."}
-				msg, err := json.Marshal(message)
-				if err != nil {
-					log.Println(err)
-				}
-
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(404)
-				w.Write(msg)
-				return
-			}
-			if err != nil {
-				log.Println(err)
-			}
-
-			userData, err := json.Marshal(user)
-			if err != nil {
-				log.Println(err)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(200)
-			w.Write(userData)
-
-		} else {
-			message := Message{"Invalid token"}
-			msg, err := json.Marshal(message)
-			if err != nil {
-				log.Println(err)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(401)
-			w.Write(msg)
-			return
-		}
-	} else {
-		message := Message{"Unauthorized access"}
-		msg, err := json.Marshal(message)
-		if err != nil {
-			log.Println(err)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(401)
-		w.Write(msg)
+		message := Message{"The record for the user couldn't be found."}
+		sendMessage(message, http.StatusBadRequest, w)
 		return
 	}
+	logErrorIfNonNil(err)
+
+	sendMessage(user, http.StatusOK, w)
 }
 
 // ***************
@@ -280,342 +218,144 @@ type Widget struct {
 	Inventory int64   `json:"inventory"`
 }
 
+
+
 func ListWidgets(w http.ResponseWriter, r *http.Request) {
-
-	token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
-		func(token *jwt.Token) (interface{}, error) {
-			return mySigningKey, nil
-		})
-
-	if err == nil {
-		if token.Valid {
-
-			widgets := make([]Widget, 0)
-
-			rows, err := db.Query("SELECT * FROM widget ORDER BY widget.id DESC")
-			if err != nil {
-				log.Println(err)
-			}
-			defer rows.Close()
-
-			for rows.Next() {
-
-				widget := Widget{}
-
-				err := rows.Scan(&widget.Id, &widget.Name, &widget.Color, &widget.Price, &widget.Melts, &widget.Inventory)
-				if err != nil {
-					log.Println(err)
-				}
-
-				widgets = append(widgets, widget)
-			}
-
-			if err := rows.Err(); err != nil {
-				log.Println(err)
-			}
-
-			widgetData, err := json.Marshal(widgets)
-			if err != nil {
-				log.Println(err)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(200)
-			w.Write(widgetData)
-
-		} else {
-			message := Message{"Invalid token"}
-			msg, err := json.Marshal(message)
-			if err != nil {
-				log.Println(err)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(401)
-			w.Write(msg)
-			return
-		}
-	} else {
-		message := Message{"Unauthorized access"}
-		msg, err := json.Marshal(message)
-		if err != nil {
-			log.Println(err)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(401)
-		w.Write(msg)
+	if !verifyTokenAccess(w, r) {
 		return
 	}
+
+	widgets := make([]Widget, 0)
+
+	rows, err := db.Query("SELECT * FROM widget ORDER BY widget.id DESC")
+	logErrorIfNonNil(err)
+	defer rows.Close()
+
+	for rows.Next() {
+
+		widget := Widget{}
+
+		err := rows.Scan(&widget.Id, &widget.Name, &widget.Color, &widget.Price, &widget.Melts, &widget.Inventory)
+		logErrorIfNonNil(err)
+
+		widgets = append(widgets, widget)
+	}
+
+	logErrorIfNonNil(rows.Err())
+
+	sendMessage(widgets, http.StatusOK, w)
 }
 
 // shortcut method
 func GetWidget(w http.ResponseWriter, r *http.Request) {
 
-	token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
-		func(token *jwt.Token) (interface{}, error) {
-			return mySigningKey, nil
-		})
+	if !verifyTokenAccess(w, r) {
+		return;
+	}
 
-	if err == nil {
-		if token.Valid {
+	widget := Widget{}
+	vars := mux.Vars(r)
+	pathParam := vars["id"]
 
-			widget := Widget{}
-			vars := mux.Vars(r)
-			pathParam := vars["id"]
+	row := db.QueryRow("SELECT * FROM widget WHERE widget.id = ?", pathParam)
 
-			row := db.QueryRow("SELECT * FROM widget WHERE widget.id = ?", pathParam)
-
-			err := row.Scan(&widget.Id, &widget.Name, &widget.Color, &widget.Price, &widget.Melts, &widget.Inventory)
-			if err == sql.ErrNoRows {
-
-				message := Message{"The record for the widget couldn't be found."}
-				msg, err := json.Marshal(message)
-				if err != nil {
-					log.Println(err)
-				}
-
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(404)
-				w.Write(msg)
-				return
-			}
-			if err != nil {
-				log.Println(err)
-			}
-
-			widgetData, err := json.Marshal(widget)
-			if err != nil {
-				log.Println(err)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(200)
-			w.Write(widgetData)
-
-		} else {
-			message := Message{"Invalid token"}
-			msg, err := json.Marshal(message)
-			if err != nil {
-				log.Println(err)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(401)
-			w.Write(msg)
-			return
-		}
-	} else {
-		message := Message{"Unauthorized access"}
-		msg, err := json.Marshal(message)
-		if err != nil {
-			log.Println(err)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(401)
-		w.Write(msg)
+	err := row.Scan(&widget.Id, &widget.Name, &widget.Color, &widget.Price, &widget.Melts, &widget.Inventory)
+	if err == sql.ErrNoRows {
+		message := Message{"The record for the widget couldn't be found."}
+		sendMessage(message, http.StatusBadRequest, w)
 		return
 	}
+
+	logErrorIfNonNil(err)
+
+	sendMessage(widget, http.StatusOK, w)
 }
 
 func CreateWidget(w http.ResponseWriter, r *http.Request) {
+	if !verifyTokenAccess(w, r) {
+		return;
+	}
 
-	token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
-		func(token *jwt.Token) (interface{}, error) {
-			return mySigningKey, nil
-		})
+	widget := Widget{}
 
-	if err == nil {
-		if token.Valid {
+	err := json.NewDecoder(r.Body).Decode(&widget)
+	//body, err := ioutil.ReadAll(r.Body)
+	//if err != nil {
+		//panic(err)
+	//}
+	//log.Println(string(body))
+	//err = json.Unmarshal(body, &widget)
 
-			widget := Widget{}
-
-			err := json.NewDecoder(r.Body).Decode(&widget)
-			//body, err := ioutil.ReadAll(r.Body)
-			//if err != nil {
-				//panic(err)
-			//}
-			//log.Println(string(body))
-			//err = json.Unmarshal(body, &widget)
-
-			if err != nil {
-				log.Println(err)
-				message := Message{"Something wrong happens. Try again later."}
-				msg, err := json.Marshal(message)
-				if err != nil {
-					log.Println(err)
-				}
-
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(400)
-				w.Write(msg)
-				return
-			}
-			if widget.Name == "" {
-				log.Println(err)
-				message := Message{"Name is required."}
-				msg, err := json.Marshal(message)
-				if err != nil {
-					log.Println(err)
-				}
-
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(406)
-				w.Write(msg)
-				return
-			}
-
-			stmt, err := db.Prepare("INSERT INTO widget (name, color, price, melts, inventory) VALUES (?, ?, ?, ?, ?)")
-			if err != nil {
-				log.Println(err)
-			}
-			defer stmt.Close()
-
-			record, err := stmt.Exec(&widget.Name, &widget.Color, &widget.Price, &widget.Melts, &widget.Inventory)
-			if err != nil {
-				log.Println(err)
-			}
-
-			lastRecord, err := record.LastInsertId()
-			if err != nil {
-				log.Println(err)
-			}
-
-			rowNum, err := record.RowsAffected()
-			if err != nil {
-				log.Println(err)
-			}
-
-			log.Printf("Widget Created :: Record id %d :: Rows Affected %d", lastRecord, rowNum)
-
-			message := Message{"Widget created successfully"}
-			msg, err := json.Marshal(message)
-			if err != nil {
-				log.Println(err)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(201)
-			w.Write(msg)
-
-		} else {
-			message := Message{"Invalid token"}
-			msg, err := json.Marshal(message)
-			if err != nil {
-				log.Println(err)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(401)
-			w.Write(msg)
-			return
-		}
-	} else {
-		message := Message{"Unauthorized access"}
-		msg, err := json.Marshal(message)
-		if err != nil {
-			log.Println(err)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(401)
-		w.Write(msg)
+	if err != nil {
+		log.Println(err)
+		message := Message{"Something wrong happens. Try again later."}
+		sendMessage(message, http.StatusBadRequest, w)
 		return
 	}
+	
+	if widget.Name == "" {
+		log.Println(err) // DOES NOT MAKE SENSE TO HAVE THIS MESSAGE THOUGH
+		message := Message{"Name is required."}
+		sendMessage(message, http.StatusNotAcceptable, w)
+		return
+	}
+
+	stmt, err := db.Prepare("INSERT INTO widget (name, color, price, melts, inventory) VALUES (?, ?, ?, ?, ?)")
+	logErrorIfNonNil(err)
+	defer stmt.Close()
+
+	record, err := stmt.Exec(&widget.Name, &widget.Color, &widget.Price, &widget.Melts, &widget.Inventory)
+	logErrorIfNonNil(err)
+
+	lastRecord, err := record.LastInsertId()
+	logErrorIfNonNil(err)
+
+	rowNum, err := record.RowsAffected()
+	logErrorIfNonNil(err)
+
+	log.Printf("Widget Created :: Record id %d :: Rows Affected %d", lastRecord, rowNum)
+
+	message := Message{"Widget created successfully"}
+	sendMessage(message, http.StatusOK, w)
 }
 
 func UpdateWidget(w http.ResponseWriter, r *http.Request) {
 
-	token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
-		func(token *jwt.Token) (interface{}, error) {
-			return mySigningKey, nil
-		})
+	if !verifyTokenAccess(w, r) {
+		return;
+	}
+	
+	widget := Widget{}
+	vars := mux.Vars(r)
+	pathParam := vars["id"]
 
-	if err == nil {
-		if token.Valid {
-
-			widget := Widget{}
-			vars := mux.Vars(r)
-			pathParam := vars["id"]
-
-			err := json.NewDecoder(r.Body).Decode(&widget)
-			if err != nil {
-				log.Println(err)
-				message := Message{"Something wrong happens. Try again later."}
-				msg, err := json.Marshal(message)
-				if err != nil {
-					log.Println(err)
-				}
-
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(400)
-				w.Write(msg)
-				return
-			}
-			if widget.Name == "" {
-				log.Println(err)
-				message := Message{"Name is required."}
-				msg, err := json.Marshal(message)
-				if err != nil {
-					log.Println(err)
-				}
-
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(406)
-				w.Write(msg)
-				return
-			}
-
-			stmt, err := db.Prepare("UPDATE widget SET widget.name = ?, widget.color = ?, widget.price = ?, widget.melts = ?, widget.inventory = ? WHERE widget.id = ?")
-			if err != nil {
-				log.Println(err)
-			}
-			defer stmt.Close()
-
-			record, err := stmt.Exec(&widget.Name, &widget.Color, &widget.Price, &widget.Melts, &widget.Inventory, pathParam)
-			if err != nil {
-				log.Println(err)
-			}
-
-			rowNum, err := record.RowsAffected()
-			if err != nil {
-				log.Println(err)
-			}
-
-			log.Printf("Widget Updated :: Rows Affected %d", rowNum)
-
-			message := Message{"Widget updated successfully"}
-			msg, err := json.Marshal(message)
-			if err != nil {
-				log.Println(err)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusAccepted)
-			w.Write(msg)
-
-		} else {
-			message := Message{"Invalid token"}
-			msg, err := json.Marshal(message)
-			if err != nil {
-				log.Println(err)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(401)
-			w.Write(msg)
-			return
-		}
-	} else {
-		message := Message{"Unauthorized access"}
-		msg, err := json.Marshal(message)
-		if err != nil {
-			log.Println(err)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(401)
-		w.Write(msg)
+	err := json.NewDecoder(r.Body).Decode(&widget)
+	if err != nil {
+		log.Println(err)
+		message := Message{"Something wrong happens. Try again later."}
+		sendMessage(message, http.StatusBadRequest, w)
 		return
 	}
+
+	if widget.Name == "" {
+		log.Println(err)
+		message := Message{"Name is required."}
+		sendMessage(message, http.StatusNotAcceptable, w)
+		return
+	}
+
+	stmt, err := db.Prepare("UPDATE widget SET widget.name = ?, widget.color = ?, widget.price = ?, widget.melts = ?, widget.inventory = ? WHERE widget.id = ?")
+	logErrorIfNonNil(err)
+	defer stmt.Close()
+
+	record, err := stmt.Exec(&widget.Name, &widget.Color, &widget.Price, &widget.Melts, &widget.Inventory, pathParam)
+	logErrorIfNonNil(err)
+
+	rowNum, err := record.RowsAffected()
+	logErrorIfNonNil(err)
+
+	log.Printf("Widget Updated :: Rows Affected %d", rowNum)
+
+	message := Message{"Widget updated successfully"}
+	sendMessage(message, http.StatusOK, w)
 }
