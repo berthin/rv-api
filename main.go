@@ -51,8 +51,6 @@ func init() {
 func main() {
 	router := mux.NewRouter()
 
-    router.HandleFunc("/", Index)
-
 	router.HandleFunc("/api/v1/users", ListUsers).Methods(http.MethodGet)
 	router.HandleFunc("/api/v1/users/{id:[0-9]+}", CreateUser).Methods(http.MethodGet)
 
@@ -67,10 +65,6 @@ func main() {
 
 	log.Print("Listening on PORT " + PORT)
 	log.Fatal(http.ListenAndServe(PORT, handlers.RecoveryHandler()(loggedRouter)))
-}
-
-func Index(w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
 }
 
 // ****************
