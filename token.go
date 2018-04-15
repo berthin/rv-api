@@ -23,19 +23,22 @@ type Token struct {
 var mySigningKey = []byte("4e3Fh54w374w")
 
 
-func GenToken(w http.ResponseWriter, r *http.Request) {
+func createToken(key []byte) (string, error) {
     token := jwt.New(jwt.SigningMethodHS256)
 
-    // @TODO: Check what are these lines used for? Seems that claims is not used. By testing with
-    // 		  GET, POST requests nothing changed when these were removed.
     claims := token.Claims.(jwt.MapClaims)
     claims["admin"] = true
     claims["exp"] = time.Now().Add(time.Hour * 24).Unix()
 
     /* Sign the token with our secret */
-    tokenString, err := token.SignedString(mySigningKey)
-    logOnError(err)
+    tokenString, err := token.SignedString(key)
+    return tokenString, err
+}
 
+
+func GenToken(w http.ResponseWriter, r *http.Request) {
+    tokenString, err := createToken(mySigningKey) 
+    logOnError(err)
     authToken := Token{}
     authToken.Token = tokenString
 
@@ -50,12 +53,14 @@ func isTokenAccessCorrect(w http.ResponseWriter, r *http.Request) bool {
         })
         
     if err != nil {
-        sendJsonThroughHttpMessage(Message{"Unauthorized access"}, http.StatusBadRequest, w)
+        message := Message{"Unauthorized access"}
+        sendJsonThroughHttpMessage(message, http.StatusBadRequest, w)
         return false
     }
     
     if !token.Valid {
-        sendJsonThroughHttpMessage(Message{"Invalid token"}, http.StatusBadRequest, w)
+        message := Message{"Invalid token"}
+        sendJsonThroughHttpMessage(message, http.StatusBadRequest, w)
         return false
     }
         

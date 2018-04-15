@@ -2,7 +2,7 @@
 // Main
 // TODO:
 // - check POST, GET, PUT
-// if r.Method != "POST" {
+// if r.Method != "POST"
 // ***************
 package main
 

@@ -7,8 +7,12 @@ run:
 clean:
 	go clean
 
+test:
+	go test -cover
+
 all:
 	make clean
 	make build
+	make test
 	make run
 
