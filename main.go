@@ -1,8 +1,5 @@
 // ***************
 // Main
-// TODO:
-// - check POST, GET, PUT
-// if r.Method != "POST"
 // ***************
 package main
 
@@ -71,8 +68,8 @@ func configureRouter() *mux.Router {
     return router
 }
 
-func main() {
 
+func main() {
     router := configureRouter()
     loggedRouter := handlers.LoggingHandler(os.Stdout, router)
 
