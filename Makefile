@@ -8,7 +8,7 @@ clean:
 	go clean
 
 test:
-	go test -cover
+	go test -v -cover
 
 all:
 	make clean

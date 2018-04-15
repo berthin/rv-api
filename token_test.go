@@ -20,14 +20,16 @@ var routerForUnitTests = configureRouter()
 func getToken() (Token, error) {
     request, err := http.NewRequest("GET", "/api/v1/auth", nil)
     if err != nil {
-        return Token{}, fmt.Errorf("Error while creating GET request. %s", err.Error())
+        err = fmt.Errorf("Error while creating GET request. %s", err.Error())
+        return Token{}, err 
     }
 
     response := httptest.NewRecorder()
     routerForUnitTests.ServeHTTP(response, request)
 
     if response.Code != http.StatusOK {
-        return Token{}, fmt.Errorf("Expected code %d, received %d.", http.StatusOK, response.Code)
+        err = fmt.Errorf("Expected code %d, received %d.", http.StatusOK, response.Code)
+        return Token{}, err
     }
 
     received_token := Token{}
@@ -69,7 +71,8 @@ func TestTokenAuth(t *testing.T) {
         routerForUnitTests.ServeHTTP(response, request)
 
         if response.Code != tokens[i].Code {
-            t.Errorf("Invalid token! Expected status code %d, but received %d.", tokens[i].Code, response.Code)
+            t.Errorf("Invalid token! Expected status code %d, but received %d.", 
+                     tokens[i].Code, response.Code)
         }
     }
 }

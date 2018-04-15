@@ -10,14 +10,14 @@ import (
     "net/http"
     "net/http/httptest"
     "encoding/json"
-	"fmt"
+    "fmt"
 )
 
 
 const (
-	// `MAX_GET_USER_REQUESTS` defines the number of GET requests
-	// that are going to be tested.
-	MAX_GET_USER_REQUESTS = 5
+    // `MAX_GET_USER_REQUESTS` defines the number of GET requests
+    // that are going to be tested.
+    MAX_GET_USER_REQUESTS = 5
 )
 
 
@@ -27,20 +27,21 @@ type ArrayOfUsers struct {
 
 
 func testGetUserByID(token string, userId int64) error {
-	userIdAsString := fmt.Sprintf("%d", userId)
+    userIdAsString := fmt.Sprintf("%d", userId)
     request, err := http.NewRequest("GET", "/api/v1/users/" + userIdAsString, nil)
     if err != nil {
         fmt.Errorf("Error while creating GET request. %s.", err.Error())
     }
 
-	response := httptest.NewRecorder()
-	request.Header.Set("authorization", token)
-	routerForUnitTests.ServeHTTP(response, request)
+    response := httptest.NewRecorder()
+    request.Header.Set("authorization", token)
+    routerForUnitTests.ServeHTTP(response, request)
 
-	if response.Code != http.StatusOK {
-		return fmt.Errorf("Invalid token! Expected status code %d, but received %d.", http.StatusOK, response.Code)
-	}
-	return nil
+    if response.Code != http.StatusOK {
+        return fmt.Errorf("Invalid token! Expected status code %d, but received %d.", 
+                          http.StatusOK, response.Code)
+    }
+    return nil
 }
 
 
@@ -65,28 +66,30 @@ func TestGetUsers(t *testing.T) {
         t.Errorf("Error while creating GET request. %s.", err.Error())
     }
 
-	response := httptest.NewRecorder()
-	request.Header.Set("authorization", validToken)
-	routerForUnitTests.ServeHTTP(response, request)
+    response := httptest.NewRecorder()
+    request.Header.Set("authorization", validToken)
+    routerForUnitTests.ServeHTTP(response, request)
 
-	if response.Code != http.StatusOK {
-		t.Errorf("Invalid token! Expected status code %d, but received %d.", http.StatusOK, response.Code)
-	}
-	
-	usersJson := ArrayOfUsers{}
-	err = json.NewDecoder(response.Body).Decode(&usersJson.Users)
-	users := usersJson.Users
+    if response.Code != http.StatusOK {
+        t.Errorf("Invalid token! Expected status code %d, but received %d.", 
+                 http.StatusOK, response.Code)
+    }
+    
+    usersJson := ArrayOfUsers{}
+    err = json.NewDecoder(response.Body).Decode(&usersJson.Users)
+    users := usersJson.Users
 
-	if err != nil {
-		t.Errorf("Error when parsing the retorned list of `users`. %s", err.Error())
-	}
+    if err != nil {
+        t.Errorf("Error when parsing the retorned list of `users`. %s", err.Error())
+    }
 
-	if numUsers := min(len(users), MAX_GET_USER_REQUESTS); numUsers > 0 {
-		for i := 0; i < numUsers; i++ {
-			err = testGetUserByID(validToken, users[i].Id)
-			if err != nil {
-				t.Errorf("Error when testing GET single user with id: %d. %s", users[i].Id, err.Error())
-			}
-		} 
-	}
+    if numUsers := min(len(users), MAX_GET_USER_REQUESTS); numUsers > 0 {
+        for i := 0; i < numUsers; i++ {
+            err = testGetUserByID(validToken, users[i].Id)
+            if err != nil {
+                t.Errorf("Error when testing GET single user with id: %d. %s", 
+                         users[i].Id, err.Error())
+            }
+        } 
+    }
 }
