@@ -14,7 +14,7 @@ import (
 )
 
 
-var router = configureRouter()
+var routerForUnitTests = configureRouter()
 
 
 func getToken() (Token, error) {
@@ -24,7 +24,7 @@ func getToken() (Token, error) {
     }
 
     response := httptest.NewRecorder()
-    router.ServeHTTP(response, request)
+    routerForUnitTests.ServeHTTP(response, request)
 
     if response.Code != http.StatusOK {
         return Token{}, fmt.Errorf("Expected code %d, received %d.", http.StatusOK, response.Code)
@@ -66,7 +66,7 @@ func TestTokenAuth(t *testing.T) {
     for i := 0; i < 3; i++ {
         response := httptest.NewRecorder()
         request.Header.Set("authorization", tokens[i].Token)
-        router.ServeHTTP(response, request)
+        routerForUnitTests.ServeHTTP(response, request)
 
         if response.Code != tokens[i].Code {
             t.Errorf("Invalid token! Expected status code %d, but received %d.", tokens[i].Code, response.Code)
